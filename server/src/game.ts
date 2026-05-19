@@ -1,6 +1,6 @@
 import { createWall, Mode } from './rules/wall.js';
 import { Tile, TileKind } from './rules/tiles.js';
-import { findAgariShapes } from './rules/agari.js';
+import { findAgariShapes, getWinningKinds, isTenpai } from './rules/agari.js';
 import { detectYaku, YakuResult } from './rules/yaku.js';
 
 export type Meld = {
@@ -31,6 +31,8 @@ export type RoundResult = {
   yaku?: YakuResult[];
   han?: number;
   yakuman?: number;
+  tenpaiIndexes?: number[];
+  notenIndexes?: number[];
   message: string;
 };
 
@@ -55,6 +57,7 @@ export type GameState = {
   riichiSticks: number;
   lastDiscard?: LastDiscard;
   ended: boolean;
+  exhaustiveDraw: boolean;
   result?: RoundResult;
 };
 
@@ -89,6 +92,7 @@ export function createInitialGame(mode: Mode, playerIds: string[], options: NewG
     honba: options.honba ?? 0,
     riichiSticks: options.riichiSticks ?? 0,
     ended: false,
+    exhaustiveDraw: false,
   };
 }
 
@@ -106,8 +110,7 @@ export function discardTile(game: GameState, playerId: string, tileId: string) {
   game.lastDiscard = { tile, fromPlayerIndex: playerIndex };
 
   if (game.wall.length === 0) {
-    game.ended = true;
-    game.result = { type: 'draw', message: '流局しました。' };
+    applyExhaustiveDraw(game);
     return;
   }
 
@@ -125,6 +128,7 @@ export function declareRiichi(game: GameState, playerId: string) {
   if (player.melds.length > 0) throw new Error('鳴いているためリーチできません。');
   if (player.points < 1000) throw new Error('リーチ棒を出す点数が足りません。');
   if (player.hand.length % 3 !== 2) throw new Error('リーチはツモ後に宣言してください。');
+  if (!isTenpaiAfterDiscard(player)) throw new Error('テンパイしていないためリーチできません。');
 
   player.riichi = true;
   player.points -= 1000;
@@ -215,6 +219,7 @@ export function claimTsumo(game: GameState, playerId: string): RoundResult {
   const result = judgeWin(game, playerIndex, player.hand.map(t => t.kind), true);
   applySimpleScore(game, playerIndex, undefined, result.han, result.yakuman);
   game.ended = true;
+  game.exhaustiveDraw = false;
   game.result = {
     type: 'tsumo',
     winnerIndex: playerIndex,
@@ -232,10 +237,13 @@ export function claimRon(game: GameState, playerId: string): RoundResult {
   if (winnerIndex === game.lastDiscard.fromPlayerIndex) throw new Error('自分の捨て牌ではロンできません。');
 
   const player = game.players[winnerIndex];
+  if (isFuriten(player, game.lastDiscard.tile.kind)) throw new Error('フリテンのためロンできません。');
+
   const kinds = [...player.hand.map(t => t.kind), game.lastDiscard.tile.kind];
   const result = judgeWin(game, winnerIndex, kinds, false);
   applySimpleScore(game, winnerIndex, game.lastDiscard.fromPlayerIndex, result.han, result.yakuman);
   game.ended = true;
+  game.exhaustiveDraw = false;
   game.result = {
     type: 'ron',
     winnerIndex,
@@ -272,6 +280,49 @@ function judgeWin(game: GameState, playerIndex: number, kinds: TileKind[], tsumo
   const yakuman = yaku.reduce((sum, item) => sum + (item.yakuman ?? 0), 0);
   const han = yakuman > 0 ? 0 : yaku.reduce((sum, item) => sum + (item.han ?? 0), 0);
   return { yaku, han, yakuman };
+}
+
+function applyExhaustiveDraw(game: GameState) {
+  const tenpaiIndexes: number[] = [];
+  const notenIndexes: number[] = [];
+
+  game.players.forEach((player, index) => {
+    if (isTenpai(player.hand.map(tile => tile.kind))) tenpaiIndexes.push(index);
+    else notenIndexes.push(index);
+  });
+
+  if (tenpaiIndexes.length > 0 && notenIndexes.length > 0) {
+    const gain = Math.floor(3000 / tenpaiIndexes.length);
+    const loss = Math.floor(3000 / notenIndexes.length);
+    for (const index of tenpaiIndexes) game.players[index].points += gain;
+    for (const index of notenIndexes) game.players[index].points -= loss;
+  }
+
+  game.ended = true;
+  game.exhaustiveDraw = true;
+  game.result = {
+    type: 'draw',
+    tenpaiIndexes,
+    notenIndexes,
+    message: tenpaiIndexes.length === 0
+      ? '流局しました。全員ノーテンです。'
+      : `流局しました。テンパイ: ${tenpaiIndexes.map(i => `Player ${i + 1}`).join('、')}`,
+  };
+}
+
+function isFuriten(player: PlayerState, winningKind: TileKind) {
+  const waits = getWinningKinds(player.hand.map(tile => tile.kind));
+  if (!waits.includes(winningKind)) return false;
+  const discardedKinds = new Set(player.discards.map(tile => tile.kind));
+  return waits.some(wait => discardedKinds.has(wait));
+}
+
+function isTenpaiAfterDiscard(player: PlayerState) {
+  for (const tile of player.hand) {
+    const rest = player.hand.filter(t => t.id !== tile.id).map(t => t.kind);
+    if (isTenpai(rest)) return true;
+  }
+  return false;
 }
 
 function getClaimContext(game: GameState, playerId: string) {
@@ -357,6 +408,7 @@ export function getPlayerView(game: GameState, viewerId: string) {
     doraIndicators: game.doraIndicators,
     lastDiscard: game.lastDiscard,
     ended: game.ended,
+    exhaustiveDraw: game.exhaustiveDraw,
     result: game.result,
     players: game.players.map((player, index) => ({
       id: player.id,
@@ -367,6 +419,8 @@ export function getPlayerView(game: GameState, viewerId: string) {
       discards: player.discards,
       melds: player.melds,
       riichi: player.riichi,
+      tenpai: isTenpai(player.hand.map(tile => tile.kind)),
+      waits: player.id === viewerId ? getWinningKinds(player.hand.map(tile => tile.kind)) : undefined,
     })),
   };
 }
