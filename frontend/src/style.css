@@ -94,6 +94,40 @@ h1 {
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.34);
 }
 
+.connectionPanel {
+  margin-bottom: 18px;
+}
+
+.fieldLabel {
+  display: block;
+  margin-bottom: 8px;
+  color: #f4d47c;
+  font-weight: 800;
+}
+
+.serverInput {
+  flex: 1 1 360px;
+}
+
+.hint,
+.status {
+  margin: 10px 0 0;
+  color: rgba(247, 242, 223, 0.72);
+}
+
+.status {
+  display: inline-flex;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(53, 176, 129, 0.2);
+  font-weight: 800;
+}
+
+.status.warn {
+  background: rgba(255, 116, 116, 0.18);
+  color: #ffb6b6;
+}
+
 .row {
   display: flex;
   flex-wrap: wrap;
@@ -127,6 +161,10 @@ h1 {
   margin-bottom: 18px;
 }
 
+.tableTopWide {
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+}
+
 .tableTop > div,
 .player,
 .result {
@@ -151,6 +189,11 @@ h1 {
 
 .actionBar button {
   min-width: 100px;
+}
+
+.nextButton {
+  margin-left: auto;
+  background: linear-gradient(180deg, #c8ffe2, #52d392);
 }
 
 .result {
@@ -179,6 +222,10 @@ h1 {
   outline: 2px solid #f4d47c;
 }
 
+.player.dealer {
+  border: 1px solid rgba(255, 224, 138, 0.36);
+}
+
 .player h2 {
   margin: 0 0 6px;
   font-size: 18px;
@@ -187,6 +234,22 @@ h1 {
 .player p {
   margin: 0 0 10px;
   color: rgba(247, 242, 223, 0.72);
+}
+
+.melds {
+  min-height: 24px;
+  margin-bottom: 8px;
+}
+
+.meldTag {
+  display: inline-flex;
+  margin: 2px 4px 4px 0;
+  padding: 5px 8px;
+  border-radius: 999px;
+  background: rgba(244, 212, 124, 0.18);
+  color: #fff0b0;
+  font-size: 12px;
+  font-weight: 800;
 }
 
 .discards {
@@ -228,9 +291,20 @@ h1 {
   font-size: 12px;
 }
 
+@media (max-width: 960px) {
+  .tableTopWide {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 760px) {
   .tableTop,
+  .tableTopWide,
   .players {
     grid-template-columns: 1fr;
+  }
+
+  .nextButton {
+    margin-left: 0;
   }
 }
