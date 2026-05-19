@@ -1,0 +1,12 @@
+{
+  "name": "ma-zyan",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev:server": "npm --prefix server run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "build": "npm --prefix server run build && npm --prefix frontend run build",
+    "install:all": "npm install && npm --prefix server install && npm --prefix frontend install"
+  },
+  "devDependencies": {}
+}
