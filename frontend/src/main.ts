@@ -12,11 +12,26 @@ type PlayerView = {
   riichi: boolean;
 };
 
+type YakuResult = { name: string; han?: number; yakuman?: number };
+
+type RoundResult = {
+  type: 'tsumo' | 'ron' | 'draw';
+  winnerIndex?: number;
+  loserIndex?: number;
+  yaku?: YakuResult[];
+  han?: number;
+  yakuman?: number;
+  message: string;
+};
+
 type GameView = {
   mode: 'yonma' | 'sanma';
   turn: number;
   wallCount: number;
   doraIndicators: Tile[];
+  ended: boolean;
+  result?: RoundResult;
+  lastDiscard?: { tile: Tile; fromPlayerIndex: number };
   players: PlayerView[];
 };
 
@@ -112,6 +127,7 @@ function renderTable(state: GameView) {
   table.classList.remove('hidden');
   const me = state.players.find(p => p.hand);
   const myHand = me?.hand ?? [];
+  const myTurn = Boolean(me && state.turn === me.index && !state.ended);
 
   table.innerHTML = `
     <div class="tableTop">
@@ -120,11 +136,19 @@ function renderTable(state: GameView) {
       <div><span>ドラ表示</span>${state.doraIndicators.map(renderSmallTile).join('')}</div>
     </div>
 
+    ${state.result ? renderResult(state.result) : ''}
+
+    <div class="actionBar">
+      <button id="riichi" ${myTurn ? '' : 'disabled'}>リーチ</button>
+      <button id="tsumo" ${myTurn ? '' : 'disabled'}>ツモ</button>
+      <button id="ron" ${state.ended ? 'disabled' : ''}>ロン</button>
+    </div>
+
     <div class="players">
       ${state.players.map(player => `
         <article class="player ${state.turn === player.index ? 'active' : ''}">
-          <h2>Player ${player.index + 1} ${state.turn === player.index ? '▶' : ''}</h2>
-          <p>${player.points}点 / 手牌 ${player.handCount}枚</p>
+          <h2>Player ${player.index + 1} ${state.turn === player.index && !state.ended ? '▶' : ''}</h2>
+          <p>${player.points}点 / 手牌 ${player.handCount}枚 ${player.riichi ? '/ リーチ' : ''}</p>
           <div class="discards">${player.discards.map(renderSmallTile).join('')}</div>
         </article>
       `).join('')}
@@ -132,7 +156,7 @@ function renderTable(state: GameView) {
 
     <div class="myHand">
       ${myHand.map(tile => `
-        <button class="tile" data-id="${tile.id}">${tileLabel(tile)}</button>
+        <button class="tile" data-id="${tile.id}" ${myTurn ? '' : 'disabled'}>${tileLabel(tile)}</button>
       `).join('')}
     </div>
   `;
@@ -142,6 +166,22 @@ function renderTable(state: GameView) {
       send({ type: 'discard', tileId: button.dataset.id });
     });
   });
+
+  table.querySelector<HTMLButtonElement>('#riichi')?.addEventListener('click', () => send({ type: 'riichi' }));
+  table.querySelector<HTMLButtonElement>('#tsumo')?.addEventListener('click', () => send({ type: 'tsumo' }));
+  table.querySelector<HTMLButtonElement>('#ron')?.addEventListener('click', () => send({ type: 'ron' }));
+}
+
+function renderResult(result: RoundResult) {
+  const yaku = result.yaku?.map(y => `${y.name}${y.yakuman ? ` ${y.yakuman}倍役満` : ` ${y.han}翻`}`).join(' / ') || '';
+  const score = result.yakuman ? `${result.yakuman}倍役満` : `${result.han ?? 0}翻`;
+  return `
+    <section class="result">
+      <h2>${escapeHtml(result.message)}</h2>
+      <p>${escapeHtml(score)}</p>
+      <p>${escapeHtml(yaku)}</p>
+    </section>
+  `;
 }
 
 function renderSmallTile(tile: Tile) {
