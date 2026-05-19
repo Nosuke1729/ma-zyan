@@ -47,6 +47,29 @@ export class RoomManager {
     this.broadcastGame(room);
   }
 
+  nextRound(room: Room) {
+    if (!room.game) throw new Error('対局が始まっていません。');
+    if (!room.game.ended) throw new Error('現在の局がまだ終了していません。');
+
+    const oldGame = room.game;
+    const points = oldGame.players.map(player => player.points);
+    const winner = oldGame.result?.winnerIndex;
+    const dealerWon = winner === oldGame.dealer;
+    const draw = oldGame.result?.type === 'draw';
+    const nextDealer = dealerWon || draw ? oldGame.dealer : (oldGame.dealer + 1) % oldGame.players.length;
+    const nextRound = nextDealer === oldGame.dealer ? oldGame.round : oldGame.round + 1;
+    const nextHonba = dealerWon || draw ? oldGame.honba + 1 : 0;
+
+    room.game = createInitialGame(room.mode, room.players.map(p => p.id), {
+      initialPoints: points,
+      dealer: nextDealer,
+      round: nextRound,
+      honba: nextHonba,
+      riichiSticks: oldGame.riichiSticks,
+    });
+    this.broadcastGame(room);
+  }
+
   broadcastRoom(room: Room) {
     for (const player of room.players) {
       player.ws.send(JSON.stringify({
