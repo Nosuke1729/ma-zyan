@@ -56,7 +56,9 @@ export class RoomManager {
     const winner = oldGame.result?.winnerIndex;
     const dealerWon = winner === oldGame.dealer;
     const draw = oldGame.result?.type === 'draw';
-    const nextDealer = dealerWon || draw ? oldGame.dealer : (oldGame.dealer + 1) % oldGame.players.length;
+    const dealerTenpai = oldGame.result?.tenpaiIndexes?.includes(oldGame.dealer) ?? false;
+    const dealerStays = dealerWon || (draw && dealerTenpai);
+    const nextDealer = dealerStays ? oldGame.dealer : (oldGame.dealer + 1) % oldGame.players.length;
     const nextRound = nextDealer === oldGame.dealer ? oldGame.round : oldGame.round + 1;
     const nextHonba = dealerWon || draw ? oldGame.honba + 1 : 0;
 
