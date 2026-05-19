@@ -12,6 +12,8 @@ type PlayerView = {
   discards: Tile[];
   melds?: Meld[];
   riichi: boolean;
+  tenpai?: boolean;
+  waits?: string[];
 };
 
 type YakuResult = { name: string; han?: number; yakuman?: number };
@@ -23,6 +25,8 @@ type RoundResult = {
   yaku?: YakuResult[];
   han?: number;
   yakuman?: number;
+  tenpaiIndexes?: number[];
+  notenIndexes?: number[];
   message: string;
 };
 
@@ -36,6 +40,7 @@ type GameView = {
   wallCount: number;
   doraIndicators: Tile[];
   ended: boolean;
+  exhaustiveDraw?: boolean;
   result?: RoundResult;
   lastDiscard?: { tile: Tile; fromPlayerIndex: number };
   players: PlayerView[];
@@ -205,11 +210,13 @@ function renderTable(state: GameView) {
       <button id="nextRound" class="nextButton" ${state.ended ? '' : 'disabled'}>次局へ</button>
     </div>
 
+    ${me?.waits && me.waits.length > 0 ? `<div class="waitInfo">テンパイ / 待ち: ${me.waits.map(waitLabel).join('、')}</div>` : ''}
+
     <div class="players">
       ${state.players.map(player => `
         <article class="player ${state.turn === player.index ? 'active' : ''} ${state.dealer === player.index ? 'dealer' : ''}">
           <h2>Player ${player.index + 1} ${state.dealer === player.index ? '親' : ''} ${state.turn === player.index && !state.ended ? '▶' : ''}</h2>
-          <p>${player.points}点 / 手牌 ${player.handCount}枚 ${player.riichi ? '/ リーチ' : ''}</p>
+          <p>${player.points}点 / 手牌 ${player.handCount}枚 ${player.riichi ? '/ リーチ' : ''} ${player.tenpai ? '/ テンパイ' : ''}</p>
           <div class="melds">${(player.melds ?? []).map(renderMeld).join('')}</div>
           <div class="discards">${player.discards.map(renderSmallTile).join('')}</div>
         </article>
@@ -241,11 +248,15 @@ function renderTable(state: GameView) {
 function renderResult(result: RoundResult) {
   const yaku = result.yaku?.map(y => `${y.name}${y.yakuman ? ` ${y.yakuman}倍役満` : ` ${y.han}翻`}`).join(' / ') || '';
   const score = result.yakuman ? `${result.yakuman}倍役満` : `${result.han ?? 0}翻`;
+  const tenpai = result.tenpaiIndexes?.length ? `<p>テンパイ: ${result.tenpaiIndexes.map(i => `Player ${i + 1}`).join('、')}</p>` : '';
+  const noten = result.notenIndexes?.length ? `<p>ノーテン: ${result.notenIndexes.map(i => `Player ${i + 1}`).join('、')}</p>` : '';
   return `
     <section class="result">
       <h2>${escapeHtml(result.message)}</h2>
       <p>${escapeHtml(score)}</p>
       <p>${escapeHtml(yaku)}</p>
+      ${tenpai}
+      ${noten}
     </section>
   `;
 }
@@ -259,7 +270,14 @@ function renderSmallTile(tile: Tile) {
 }
 
 function tileLabel(tile: Tile) {
-  const kind = tile.kind;
+  return kindLabel(tile.kind, tile.red);
+}
+
+function waitLabel(kind: string) {
+  return kindLabel(kind, false);
+}
+
+function kindLabel(kind: string, red = false) {
   const suit = kind[1];
   const n = kind[0];
   const honors: Record<string, string> = {
@@ -267,7 +285,7 @@ function tileLabel(tile: Tile) {
   };
   const suits: Record<string, string> = { m: '萬', p: '筒', s: '索' };
   if (suit === 'z') return honors[kind] ?? kind;
-  return `${tile.red ? '赤' : ''}${n}${suits[suit]}`;
+  return `${red ? '赤' : ''}${n}${suits[suit]}`;
 }
 
 function roundLabel(round: number) {
