@@ -1,0 +1,18 @@
+{
+  "name": "ma-zyan-server",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "ws": "latest"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/ws": "latest",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}
