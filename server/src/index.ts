@@ -49,6 +49,13 @@ wss.on('connection', ws => {
         return;
       }
 
+      if (msg.type === 'next_round') {
+        const room = getOwnRoom(playerId);
+        rooms.nextRound(room);
+        rooms.broadcastRoom(room);
+        return;
+      }
+
       if (msg.type === 'discard') {
         const room = getOwnRoom(playerId);
         if (!room.game) throw new Error('対局が始まっていません。');
