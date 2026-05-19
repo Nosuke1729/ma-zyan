@@ -2,7 +2,7 @@ import http from 'node:http';
 import crypto from 'node:crypto';
 import { WebSocketServer } from 'ws';
 import { RoomManager, Player } from './room.js';
-import { claimRon, claimTsumo, declareRiichi, discardTile } from './game.js';
+import { claimChi, claimKan, claimPon, claimRon, claimTsumo, declareRiichi, discardTile } from './game.js';
 
 const server = http.createServer((req, res) => {
   if (req.url === '/health') {
@@ -77,6 +77,30 @@ wss.on('connection', ws => {
         const room = getOwnRoom(playerId);
         if (!room.game) throw new Error('対局が始まっていません。');
         claimRon(room.game, playerId);
+        rooms.broadcastGame(room);
+        return;
+      }
+
+      if (msg.type === 'pon') {
+        const room = getOwnRoom(playerId);
+        if (!room.game) throw new Error('対局が始まっていません。');
+        claimPon(room.game, playerId);
+        rooms.broadcastGame(room);
+        return;
+      }
+
+      if (msg.type === 'chi') {
+        const room = getOwnRoom(playerId);
+        if (!room.game) throw new Error('対局が始まっていません。');
+        claimChi(room.game, playerId);
+        rooms.broadcastGame(room);
+        return;
+      }
+
+      if (msg.type === 'kan') {
+        const room = getOwnRoom(playerId);
+        if (!room.game) throw new Error('対局が始まっていません。');
+        claimKan(room.game, playerId);
         rooms.broadcastGame(room);
         return;
       }
