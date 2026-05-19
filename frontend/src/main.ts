@@ -1,6 +1,7 @@
 import './style.css';
 
 type Tile = { id: string; kind: string; red?: boolean };
+type Meld = { type: 'chi' | 'pon' | 'kan'; tiles: Tile[]; open: boolean; fromPlayerIndex: number };
 
 type PlayerView = {
   id: string;
@@ -9,6 +10,7 @@ type PlayerView = {
   hand?: Tile[];
   handCount: number;
   discards: Tile[];
+  melds?: Meld[];
   riichi: boolean;
 };
 
@@ -27,6 +29,10 @@ type RoundResult = {
 type GameView = {
   mode: 'yonma' | 'sanma';
   turn: number;
+  dealer: number;
+  round: number;
+  honba: number;
+  riichiSticks: number;
   wallCount: number;
   doraIndicators: Tile[];
   ended: boolean;
@@ -178,8 +184,11 @@ function renderTable(state: GameView) {
   const myTurn = Boolean(me && state.turn === me.index && !state.ended);
 
   table.innerHTML = `
-    <div class="tableTop">
-      <div><span>モード</span><b>${state.mode === 'yonma' ? '四麻' : '三麻'}</b></div>
+    <div class="tableTop tableTopWide">
+      <div><span>局</span><b>${roundLabel(state.round)}</b></div>
+      <div><span>本場</span><b>${state.honba}</b></div>
+      <div><span>供託</span><b>${state.riichiSticks}</b></div>
+      <div><span>親</span><b>Player ${state.dealer + 1}</b></div>
       <div><span>山</span><b>${state.wallCount}</b></div>
       <div><span>ドラ表示</span>${state.doraIndicators.map(renderSmallTile).join('')}</div>
     </div>
@@ -193,13 +202,15 @@ function renderTable(state: GameView) {
       <button id="pon" ${state.ended ? 'disabled' : ''}>ポン</button>
       <button id="chi" ${state.ended ? 'disabled' : ''}>チー</button>
       <button id="kan" ${state.ended ? 'disabled' : ''}>カン</button>
+      <button id="nextRound" class="nextButton" ${state.ended ? '' : 'disabled'}>次局へ</button>
     </div>
 
     <div class="players">
       ${state.players.map(player => `
-        <article class="player ${state.turn === player.index ? 'active' : ''}">
-          <h2>Player ${player.index + 1} ${state.turn === player.index && !state.ended ? '▶' : ''}</h2>
+        <article class="player ${state.turn === player.index ? 'active' : ''} ${state.dealer === player.index ? 'dealer' : ''}">
+          <h2>Player ${player.index + 1} ${state.dealer === player.index ? '親' : ''} ${state.turn === player.index && !state.ended ? '▶' : ''}</h2>
           <p>${player.points}点 / 手牌 ${player.handCount}枚 ${player.riichi ? '/ リーチ' : ''}</p>
+          <div class="melds">${(player.melds ?? []).map(renderMeld).join('')}</div>
           <div class="discards">${player.discards.map(renderSmallTile).join('')}</div>
         </article>
       `).join('')}
@@ -224,6 +235,7 @@ function renderTable(state: GameView) {
   table.querySelector<HTMLButtonElement>('#pon')?.addEventListener('click', () => send({ type: 'pon' }));
   table.querySelector<HTMLButtonElement>('#chi')?.addEventListener('click', () => send({ type: 'chi' }));
   table.querySelector<HTMLButtonElement>('#kan')?.addEventListener('click', () => send({ type: 'kan' }));
+  table.querySelector<HTMLButtonElement>('#nextRound')?.addEventListener('click', () => send({ type: 'next_round' }));
 }
 
 function renderResult(result: RoundResult) {
@@ -236,6 +248,10 @@ function renderResult(result: RoundResult) {
       <p>${escapeHtml(yaku)}</p>
     </section>
   `;
+}
+
+function renderMeld(meld: Meld) {
+  return `<span class="meldTag">${meld.type.toUpperCase()} ${meld.tiles.map(tileLabel).join(' ')}</span>`;
 }
 
 function renderSmallTile(tile: Tile) {
@@ -254,8 +270,13 @@ function tileLabel(tile: Tile) {
   return `${tile.red ? '赤' : ''}${n}${suits[suit]}`;
 }
 
+function roundLabel(round: number) {
+  const wind = round < 4 ? '東' : '南';
+  return `${wind}${(round % 4) + 1}局`;
+}
+
 function escapeHtml(text: string) {
-  return text.replace(/[&<>'"]/g, ch => ({
+  return text.replace(/[&<>'\"]/g, ch => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#039;', '"': '&quot;'
   }[ch]!));
 }
