@@ -35,8 +35,8 @@ type GameView = {
   players: PlayerView[];
 };
 
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8787';
-const ws = new WebSocket(WS_URL);
+const DEFAULT_WS_URL = import.meta.env.VITE_WS_URL || localStorage.getItem('mazyan_ws_url') || '';
+let ws: WebSocket | null = null;
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
@@ -46,6 +46,16 @@ app.innerHTML = `
       <p class="eyebrow">Online Japanese Mahjong</p>
       <h1>ma-zyan</h1>
       <p>四麻・三麻の部屋を作って、ブラウザでリアルタイム対戦できます。</p>
+    </section>
+
+    <section class="panel connectionPanel">
+      <label class="fieldLabel" for="serverUrl">Render WebSocket URL</label>
+      <div class="row">
+        <input id="serverUrl" class="serverInput" placeholder="wss://your-server.onrender.com" value="${escapeHtml(DEFAULT_WS_URL)}" />
+        <button id="connect">接続</button>
+      </div>
+      <p class="hint">Renderを作った後、ここに <b>wss://...</b> を入れると、このGitHub Pages上でオンライン対戦できます。</p>
+      <p id="status" class="status ${DEFAULT_WS_URL ? '' : 'warn'}">${DEFAULT_WS_URL ? '未接続' : 'Render URL 未設定'}</p>
     </section>
 
     <section class="panel">
@@ -66,9 +76,69 @@ app.innerHTML = `
   </main>
 `;
 
+if (DEFAULT_WS_URL) connect(DEFAULT_WS_URL);
+
+document.querySelector('#connect')!.addEventListener('click', () => {
+  const value = document.querySelector<HTMLInputElement>('#serverUrl')!.value.trim();
+  connect(value);
+});
+
+function connect(url: string) {
+  if (!url) {
+    setStatus('Render URL 未設定', true);
+    writeLog('Renderでサーバーを作った後、wss://... のURLを入力してください。', true);
+    return;
+  }
+
+  if (!url.startsWith('wss://') && !url.startsWith('ws://')) {
+    setStatus('URLは ws:// または wss:// で始めてください。', true);
+    return;
+  }
+
+  ws?.close();
+  localStorage.setItem('mazyan_ws_url', url);
+  setStatus('接続中...');
+  ws = new WebSocket(url);
+
+  ws.addEventListener('open', () => {
+    setStatus('接続済み');
+    writeLog('サーバーに接続しました。');
+  });
+
+  ws.addEventListener('close', () => {
+    setStatus('未接続', true);
+    writeLog('サーバー接続が切れました。Renderが未起動、URL違い、またはスリープ中の可能性があります。', true);
+  });
+
+  ws.addEventListener('message', event => {
+    const msg = JSON.parse(event.data);
+
+    if (msg.type === 'room_created') {
+      writeLog(`部屋ID: ${msg.roomId}`);
+    }
+
+    if (msg.type === 'room_update') {
+      const names = msg.room.players.map((p: { name: string }) => p.name).join(' / ');
+      document.querySelector('#log')!.innerHTML = `
+        <p>部屋: <b>${msg.room.id}</b> / ${msg.room.mode === 'yonma' ? '四麻' : '三麻'}</p>
+        <p>参加者: ${escapeHtml(names)}</p>
+      `;
+    }
+
+    if (msg.type === 'game_update') renderTable(msg.state);
+    if (msg.type === 'error') writeLog(msg.message, true);
+  });
+}
+
+function setStatus(text: string, warn = false) {
+  const status = document.querySelector('#status')!;
+  status.textContent = text;
+  status.className = `status ${warn ? 'warn' : ''}`;
+}
+
 function send(message: unknown) {
-  if (ws.readyState !== WebSocket.OPEN) {
-    writeLog('サーバーに接続中です。少し待ってからもう一度押してください。', true);
+  if (!ws || ws.readyState !== WebSocket.OPEN) {
+    writeLog('まだサーバーに接続できていません。Render URLを入力して「接続」を押してください。', true);
     return;
   }
   ws.send(JSON.stringify(message));
@@ -100,28 +170,6 @@ document.querySelector('#start')!.addEventListener('click', () => {
   send({ type: 'start_game' });
 });
 
-ws.addEventListener('open', () => writeLog('サーバーに接続しました。'));
-ws.addEventListener('close', () => writeLog('サーバー接続が切れました。', true));
-
-ws.addEventListener('message', event => {
-  const msg = JSON.parse(event.data);
-
-  if (msg.type === 'room_created') {
-    writeLog(`部屋ID: ${msg.roomId}`);
-  }
-
-  if (msg.type === 'room_update') {
-    const names = msg.room.players.map((p: { name: string }) => p.name).join(' / ');
-    document.querySelector('#log')!.innerHTML = `
-      <p>部屋: <b>${msg.room.id}</b> / ${msg.room.mode === 'yonma' ? '四麻' : '三麻'}</p>
-      <p>参加者: ${escapeHtml(names)}</p>
-    `;
-  }
-
-  if (msg.type === 'game_update') renderTable(msg.state);
-  if (msg.type === 'error') writeLog(msg.message, true);
-});
-
 function renderTable(state: GameView) {
   const table = document.querySelector<HTMLElement>('#table')!;
   table.classList.remove('hidden');
@@ -142,6 +190,9 @@ function renderTable(state: GameView) {
       <button id="riichi" ${myTurn ? '' : 'disabled'}>リーチ</button>
       <button id="tsumo" ${myTurn ? '' : 'disabled'}>ツモ</button>
       <button id="ron" ${state.ended ? 'disabled' : ''}>ロン</button>
+      <button id="pon" ${state.ended ? 'disabled' : ''}>ポン</button>
+      <button id="chi" ${state.ended ? 'disabled' : ''}>チー</button>
+      <button id="kan" ${state.ended ? 'disabled' : ''}>カン</button>
     </div>
 
     <div class="players">
@@ -170,6 +221,9 @@ function renderTable(state: GameView) {
   table.querySelector<HTMLButtonElement>('#riichi')?.addEventListener('click', () => send({ type: 'riichi' }));
   table.querySelector<HTMLButtonElement>('#tsumo')?.addEventListener('click', () => send({ type: 'tsumo' }));
   table.querySelector<HTMLButtonElement>('#ron')?.addEventListener('click', () => send({ type: 'ron' }));
+  table.querySelector<HTMLButtonElement>('#pon')?.addEventListener('click', () => send({ type: 'pon' }));
+  table.querySelector<HTMLButtonElement>('#chi')?.addEventListener('click', () => send({ type: 'chi' }));
+  table.querySelector<HTMLButtonElement>('#kan')?.addEventListener('click', () => send({ type: 'kan' }));
 }
 
 function renderResult(result: RoundResult) {
