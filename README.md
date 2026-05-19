@@ -14,10 +14,17 @@
 
 まだ雀魂レベルの完全実装ではありません。今後、鳴き、リーチ、ロン、ツモ、フリテン、符計算、点数移動、半荘進行を追加して完成度を上げる構成です。
 
-## 起動方法
+## 構成
+
+```txt
+frontend/  GitHub Pages に置くWeb画面
+server/    Renderで動かすWebSocketサーバー
+```
+
+## ローカル起動
 
 ```bash
-npm install
+npm run install:all
 npm run dev:server
 ```
 
@@ -29,8 +36,62 @@ npm run dev:frontend
 
 ローカルではフロントエンドが `ws://localhost:8787` に接続します。
 
-デプロイ時は `frontend` 側に以下を設定してください。
+## Renderでサーバーをデプロイ
 
-```bash
-VITE_WS_URL=wss://your-server-url.onrender.com
+RenderでこのGitHubリポジトリを接続し、BlueprintまたはWeb Serviceとしてデプロイします。
+
+`render.yaml` を追加済みなので、Blueprintとして作る場合は以下の設定になります。
+
+```txt
+rootDir: server
+buildCommand: npm install && npm run build
+startCommand: npm start
 ```
+
+Renderで公開されたURLが例えば：
+
+```txt
+https://ma-zyan-server.onrender.com
+```
+
+なら、WebSocket URLは：
+
+```txt
+wss://ma-zyan-server.onrender.com
+```
+
+になります。
+
+## GitHub PagesでWebをデプロイ
+
+`frontend/index.html` と Vite の設定は作成済みです。
+
+GitHub Pagesは `frontend/dist` をデプロイするGitHub Actionsを使います。
+
+GitHub側で以下を設定してください。
+
+1. Repository Settings → Pages
+2. Source を `GitHub Actions` にする
+3. Repository Settings → Secrets and variables → Actions
+4. `VITE_WS_URL` を追加
+5. 値を Render の WebSocket URL にする
+
+例：
+
+```txt
+VITE_WS_URL=wss://ma-zyan-server.onrender.com
+```
+
+その後、`main` にpushされると自動でGitHub Pagesにデプロイされます。
+
+## WebページURL
+
+GitHub Pagesを有効化すると、基本的には以下になります。
+
+```txt
+https://nosuke1729.github.io/ma-zyan/
+```
+
+## 注意
+
+Renderの無料プランでは、しばらくアクセスがないとサーバーがスリープすることがあります。その場合、最初の接続だけ時間がかかります。
