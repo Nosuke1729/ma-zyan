@@ -196,6 +196,16 @@ h1 {
   background: linear-gradient(180deg, #c8ffe2, #52d392);
 }
 
+.waitInfo {
+  margin: 0 0 18px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: rgba(82, 211, 146, 0.18);
+  border: 1px solid rgba(143, 255, 198, 0.28);
+  color: #d8ffe9;
+  font-weight: 800;
+}
+
 .result {
   margin-bottom: 18px;
   border: 1px solid rgba(244, 212, 124, 0.38);
