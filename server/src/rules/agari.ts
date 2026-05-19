@@ -1,4 +1,4 @@
-import { TileKind, compareKind, isHonor, tileNumber, tileSuit } from './tiles.js';
+import { ALL_KINDS, TileKind, compareKind, isHonor, tileNumber, tileSuit } from './tiles.js';
 
 export type MeldShape =
   | { type: 'sequence'; tiles: TileKind[] }
@@ -32,6 +32,22 @@ export function findAgariShapes(kinds: TileKind[]): AgariShape[] {
 
 export function isAgari(kinds: TileKind[]): boolean {
   return findAgariShapes(kinds).length > 0;
+}
+
+export function getWinningKinds(kinds: TileKind[]): TileKind[] {
+  const counts = countKinds(kinds);
+  const waits: TileKind[] = [];
+
+  for (const kind of ALL_KINDS) {
+    if ((counts.get(kind) ?? 0) >= 4) continue;
+    if (isAgari([...kinds, kind])) waits.push(kind);
+  }
+
+  return waits;
+}
+
+export function isTenpai(kinds: TileKind[]): boolean {
+  return getWinningKinds(kinds).length > 0;
 }
 
 function isChiitoi(kinds: TileKind[]): boolean {
