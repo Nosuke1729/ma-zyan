@@ -34,6 +34,14 @@ export type RoundResult = {
   message: string;
 };
 
+export type NewGameOptions = {
+  initialPoints?: number[];
+  dealer?: number;
+  round?: number;
+  honba?: number;
+  riichiSticks?: number;
+};
+
 export type GameState = {
   mode: Mode;
   players: PlayerState[];
@@ -43,20 +51,23 @@ export type GameState = {
   turn: number;
   dealer: number;
   round: number;
+  honba: number;
+  riichiSticks: number;
   lastDiscard?: LastDiscard;
   ended: boolean;
   result?: RoundResult;
 };
 
-export function createInitialGame(mode: Mode, playerIds: string[]): GameState {
+export function createInitialGame(mode: Mode, playerIds: string[], options: NewGameOptions = {}): GameState {
   const wall = createWall(mode);
   const deadWall = wall.splice(-14);
-  const players: PlayerState[] = playerIds.map(id => ({
+  const dealer = options.dealer ?? 0;
+  const players: PlayerState[] = playerIds.map((id, index) => ({
     id,
     hand: [],
     discards: [],
     melds: [],
-    points: mode === 'yonma' ? 25000 : 35000,
+    points: options.initialPoints?.[index] ?? (mode === 'yonma' ? 25000 : 35000),
     riichi: false,
   }));
 
@@ -64,7 +75,7 @@ export function createInitialGame(mode: Mode, playerIds: string[]): GameState {
     for (const player of players) player.hand.push(wall.shift()!);
   }
 
-  players[0].hand.push(wall.shift()!);
+  players[dealer].hand.push(wall.shift()!);
 
   return {
     mode,
@@ -72,9 +83,11 @@ export function createInitialGame(mode: Mode, playerIds: string[]): GameState {
     wall,
     deadWall,
     doraIndicators: [deadWall[4]],
-    turn: 0,
-    dealer: 0,
-    round: 0,
+    turn: dealer,
+    dealer,
+    round: options.round ?? 0,
+    honba: options.honba ?? 0,
+    riichiSticks: options.riichiSticks ?? 0,
     ended: false,
   };
 }
@@ -115,6 +128,7 @@ export function declareRiichi(game: GameState, playerId: string) {
 
   player.riichi = true;
   player.points -= 1000;
+  game.riichiSticks += 1;
 }
 
 export function claimPon(game: GameState, playerId: string) {
@@ -137,11 +151,12 @@ export function claimKan(game: GameState, playerId: string) {
   if (!player) throw new Error('プレイヤーが見つかりません。');
 
   if (game.lastDiscard && game.lastDiscard.fromPlayerIndex !== playerIndex) {
-    const sameTiles = player.hand.filter(tile => tile.kind === game.lastDiscard!.tile.kind).slice(0, 3);
+    const discard = game.lastDiscard;
+    const sameTiles = player.hand.filter(tile => tile.kind === discard.tile.kind).slice(0, 3);
     if (sameTiles.length < 3) throw new Error('大明槓できる牌が足りません。');
     removeTilesFromHand(player, sameTiles.map(t => t.id));
     removeLastDiscard(game);
-    player.melds.push({ type: 'kan', tiles: [...sameTiles, game.lastDiscard.tile], fromPlayerIndex: game.lastDiscard.fromPlayerIndex, open: true });
+    player.melds.push({ type: 'kan', tiles: [...sameTiles, discard.tile], fromPlayerIndex: discard.fromPlayerIndex, open: true });
     game.turn = playerIndex;
     game.lastDiscard = undefined;
     drawRinshan(game, player);
@@ -249,7 +264,7 @@ function judgeWin(game: GameState, playerIndex: number, kinds: TileKind[], tsumo
     tenhou: false,
     chiihou: false,
     seatWind: indexToWind(playerIndex),
-    roundWind: 'east',
+    roundWind: roundWind(game.round),
   });
 
   if (yaku.length === 0) throw new Error('和了形ですが、役がありません。');
@@ -295,25 +310,35 @@ function flipKanDora(game: GameState) {
 }
 
 function applySimpleScore(game: GameState, winnerIndex: number, loserIndex: number | undefined, han: number, yakuman: number) {
+  const honbaBonus = game.honba * 300;
+  const riichiBonus = game.riichiSticks * 1000;
   const base = yakuman > 0 ? yakuman * 32000 : Math.max(1000, Math.min(12000, han * 2000));
   const winner = game.players[winnerIndex];
 
   if (loserIndex !== undefined) {
-    game.players[loserIndex].points -= base;
-    winner.points += base;
+    const payment = base + honbaBonus;
+    game.players[loserIndex].points -= payment;
+    winner.points += payment + riichiBonus;
+    game.riichiSticks = 0;
     return;
   }
 
-  const each = Math.ceil(base / (game.players.length - 1));
+  const each = Math.ceil((base + honbaBonus) / (game.players.length - 1));
   for (let i = 0; i < game.players.length; i++) {
     if (i === winnerIndex) continue;
     game.players[i].points -= each;
     winner.points += each;
   }
+  winner.points += riichiBonus;
+  game.riichiSticks = 0;
 }
 
 function indexToWind(index: number) {
   return (['east', 'south', 'west', 'north'] as const)[index] ?? 'east';
+}
+
+function roundWind(round: number) {
+  return round < 4 ? 'east' : 'south';
 }
 
 function assertPlaying(game: GameState) {
@@ -324,6 +349,10 @@ export function getPlayerView(game: GameState, viewerId: string) {
   return {
     mode: game.mode,
     turn: game.turn,
+    dealer: game.dealer,
+    round: game.round,
+    honba: game.honba,
+    riichiSticks: game.riichiSticks,
     wallCount: game.wall.length,
     doraIndicators: game.doraIndicators,
     lastDiscard: game.lastDiscard,
