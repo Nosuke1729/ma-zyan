@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: ma-zyan-server
+    env: node
+    rootDir: server
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: 22
